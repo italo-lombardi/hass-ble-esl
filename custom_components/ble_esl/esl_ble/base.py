@@ -259,6 +259,13 @@ class BleParser(BluetoothData, ABC):
         self, volts: float, min_v: float = BATTERY_MIN_VOLTAGE, max_v: float = BATTERY_MAX_VOLTAGE
     ) -> None:
         """Publish voltage, percentage and battery-low from a passive reading."""
+        # Advertised voltage is 0.1 V coarse, so a steady cell dithers by one
+        # step and the percentage flaps. Hold the last value until the reading
+        # moves by more than a single step; real charge/discharge still passes.
+        last = getattr(self, "_last_battery_volts", None)
+        if last is not None and abs(round((volts - last) * 10)) <= 1:
+            volts = last
+        self._last_battery_volts = volts
         self.update_predefined_sensor(SensorLibrary.VOLTAGE__ELECTRIC_POTENTIAL_VOLT, volts)
         self.update_predefined_sensor(
             SensorLibrary.BATTERY__PERCENTAGE, battery_percent(volts, min_v, max_v)

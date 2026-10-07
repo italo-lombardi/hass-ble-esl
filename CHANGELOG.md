@@ -4,7 +4,7 @@
 
 ### Fixed
 
-- PickSmart battery percentage mapped the cell voltage over 2.5–2.9 V, too narrow for its 0.1 V advertisement resolution, so a normal 2.8↔2.9 V flutter swung the sensor 75%↔100%. PickSmart now maps over its 2.2–3.0 V cell range (set in its `const.py`); WOLINK and easyTag keep the 2.5–2.9 V default.
+- PickSmart battery percentage swung 75%↔100% while the cell was steady: the advertisement reports voltage in coarse 0.1 V steps, so a normal 2.8↔2.9 V flutter crossed a battery-percentage step. A small deadband now holds the last voltage until the reading moves by more than one 0.1 V step, so a steady cell reads steady while a real charge/discharge still passes through. The 2.5–2.9 V range is unchanged for all protocols.
 
 ## 1.1.3
 

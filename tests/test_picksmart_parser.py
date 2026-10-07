@@ -77,13 +77,13 @@ def test_picksmart_parser_device_info_and_battery():
     assert device.sw_version == "0x8101"
     values = sensor_values(update)
     assert values["voltage"] == 2.6
-    # (2.6 - 2.2) * 100 / (3.0 - 2.2) = 50%
-    assert values["battery"] == 50
+    # (2.6 - 2.5) * 100 / (2.9 - 2.5) = 25%
+    assert values["battery"] == 25
     assert binary_values(update)["battery"] is False
 
 
 def test_picksmart_parser_battery_low_and_clamp():
-    """Battery low turns on at 2.2 V; percentage clamps to 0-100."""
+    """Battery low turns on at 2.5 V; percentage clamps to 0-100."""
 
     def run(decivolts):
         parser = PickSmartBluetoothDeviceData(PRESETS["0x0033"])
@@ -96,12 +96,31 @@ def test_picksmart_parser_battery_low_and_clamp():
         )
         return sensor_values(update)["battery"], binary_values(update)["battery"]
 
-    assert run(0x15) == (0, True)  # 2.1 V
-    assert run(0x16) == (0, True)  # 2.2 V (min)
-    assert run(0x18) == (25, False)  # 2.4 V
-    assert run(0x1A) == (50, False)  # 2.6 V
-    assert run(0x1E) == (100, False)  # 3.0 V (max)
+    assert run(0x18) == (0, True)  # 2.4 V
+    assert run(0x19) == (0, True)  # 2.5 V
+    assert run(0x1A) == (25, False)  # 2.6 V
+    assert run(0x1D) == (100, False)  # 2.9 V
     assert run(0x20) == (100, False)  # 3.2 V (clamped)
+
+
+def test_picksmart_battery_deadband():
+    """A single-step voltage dither holds the last reading; a larger move passes."""
+    parser = PickSmartBluetoothDeviceData(PRESETS["0x0033"])
+
+    def feed(decivolts):
+        update = parser.update(
+            service_info(
+                "AA:BB:CC:DD:EE:FF",
+                service_uuids=[SERVICE_UUIDS[0]],
+                manufacturer_data={MANUFACTURER_ID: bytes([0x33, decivolts, 0x81, 0x01, 0x40])},
+            )
+        )
+        return sensor_values(update)["voltage"], sensor_values(update)["battery"]
+
+    assert feed(0x1C) == (2.8, 75)  # first reading sticks
+    assert feed(0x1D) == (2.8, 75)  # +0.1 V dither ignored (would be 100%)
+    assert feed(0x1B) == (2.8, 75)  # -0.1 V dither ignored
+    assert feed(0x1A) == (2.6, 25)  # 0.2 V drop passes through
 
 
 def test_picksmart_firmware_encoding():
